@@ -1,0 +1,7 @@
+<launch>
+    <!-- Load parameters from YAML file -->
+    <rosparam file="$(find bag_utility)/params/params.yaml" command="load"/>
+
+    <!--launch node-->
+    <node name="save_bags" pkg="bag_utility" type="save_bags" output="screen"/>
+</launch>

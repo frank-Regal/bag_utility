@@ -1,8 +1,11 @@
 #include <string>
 #include <chrono>
+#include <vector>
+#include <functional>
 
 #include "rosbag/bag.h"
 #include <ros/ros.h>
+#include <ros/time.h>
 #include "audio_common_msgs/AudioData.h"
 #include "sensor_msgs/Image.h"
 #include "std_msgs/Empty.h"
@@ -11,72 +14,110 @@ class SaveBags {
 
 public:
     // constructors
-    SaveBags():
+    SaveBags(ros::NodeHandle& Nh):
+        nh_(Nh),
         file_timestamp("new"),
         post_fix_("bag"){}
     
-    SaveBags(std::string& PostFix):
+    SaveBags(ros::NodeHandle& Nh, std::string& PostFix):
+        nh_(Nh),
         file_timestamp("new"),
         post_fix_(PostFix) {}
 
     // destructor
     ~SaveBags(){};
-    
-    // start utility function
-    void StartRecordingBag(const std_msgs::Empty::ConstPtr& Msg)
-    {
-        GetTimeStamp(file_timestamp);
-        bag_.open(std::string(file_timestamp + post_fix_ + ".bag"), rosbag::bagmode::Write);
-        ROS_INFO_STREAM("Bag opened for recording.");
 
+    // Subscriber function
+    template<typename T>
+    bool SubscribeToTopic(
+        const std::string& TopicParam,
+        const int& QueueSize, 
+        void(SaveBags::*CallbackFunc)(const typename T::ConstPtr&, const std::string&))
+    {   
+        // init param options
+        std::string topic_name;
+        std::vector<std::string> topic_name_list;
+
+        // based on param type, subscribe
+        if(nh_.getParam(TopicParam, topic_name))
+        {
+            CreateSubscriber<T>(topic_name, QueueSize, CallbackFunc);
+            return true;
+        }
+        else if(nh_.getParam(TopicParam, topic_name_list))
+        {
+            CreateSubscriber<T>(topic_name_list, QueueSize, CallbackFunc);
+            return true;
+        }
+        else
+        {
+            ROS_ERROR("Faild to load '%s' param.", TopicParam.c_str());
+            return false;
+        }
     }
     
-    // stop utility function 
-    void StopRecordingBag(const std_msgs::Empty::ConstPtr& Msg)
+    // write topics to bag
+    template<typename T>
+    void WriteToBag(
+        const typename T::ConstPtr& Msg, 
+        const std::string& TopicName)
     {
-        bag_.close();
-        ROS_INFO_STREAM("Bag closed");
+        try 
+        {
+            bag_.write(TopicName, ros::Time::now(), *Msg);
+            ROS_INFO("Bagged msg from: %s", TopicName.c_str());
+        } 
+        catch (const std::exception& e) 
+        {
+            ROS_ERROR_STREAM("Error in writing to bag: " << e.what());
+        }
     }
 
-    // write utility function
-    void WriteImageMsg(const sensor_msgs::Image::ConstPtr& Msg, const std::string& TopicName)
+    // write topics to bag
+    template<typename T>
+    void WriteToBagStamped(
+        const typename T::ConstPtr& Msg, 
+        const std::string& TopicName)
     {
         try 
         {
             bag_.write(TopicName, Msg->header.stamp, *Msg);
-            ROS_INFO_STREAM("writing new message ...");
+            ROS_INFO("Bagged msg from: %s", TopicName.c_str());
         } 
         catch (const std::exception& e) 
         {
-            ROS_ERROR_STREAM("Error in StartRecordingBag: " << e.what());
+            ROS_ERROR_STREAM("Error in writing to bag: " << e.what());
         }
-        
     }
 
-    void callback(const ros::MessageEvent<sensor_msgs::Image const>& event)
+        // start utility function
+    void StartRecordingBag(
+        const std_msgs::Empty::ConstPtr& Msg, 
+        const std::string& TopicName)
     {
-      const std::string& publisher_name = event.getPublisherName();
-      ROS_INFO_STREAM(publisher_name);
-      const ros::M_string& header = event.getConnectionHeader();
-      std::string topic = header.at("topic");
-      ROS_INFO_STREAM(topic);
-      ros::Time receipt_time = event.getReceiptTime();
-    
-      const sensor_msgs::ImageConstPtr& msg = event.getMessage();
+        GetTimeStamp(file_timestamp);
+        bag_.open(std::string(file_timestamp + post_fix_ + ".bag"), rosbag::bagmode::Write);
+        ROS_INFO_STREAM("Bag opened for recording.");
+        WriteToBag<std_msgs::Empty>(Msg, TopicName);
     }
-
-    // // write utility function
-    // void WriteAudioDataMsg(audio_common_msgs::AudioData& Msg)
-    // {
-
-    // }
-
+    
+    // stop utility function 
+    void StopRecordingBag(
+        const std_msgs::Empty::ConstPtr& Msg, 
+        const std::string& TopicName)
+    {
+        WriteToBag<std_msgs::Empty>(Msg, TopicName);
+        bag_.close();
+        ROS_INFO_STREAM("Bag closed");
+    }
 
 private:
     // class variables
     std::string file_timestamp;
     std::string post_fix_;
     rosbag::Bag bag_;
+    std::vector<ros::Subscriber> subscribers_;
+    ros::NodeHandle nh_;
 
     // timestamp function
     void GetTimeStamp(std::string& TimeStamp)
@@ -86,6 +127,33 @@ private:
         std::stringstream ss;
         ss << std::put_time(std::localtime(&in_time_t), "%Y%m%d_%H%M%S_");
         TimeStamp = ss.str();
+    }
+
+    // subscribe to specific topic
+    template<typename T>
+    void CreateSubscriber(
+        const std::string& TopicName,
+        const int& QueueSize, 
+        void(SaveBags::*CallbackFunc)(const typename T::ConstPtr&, const std::string&))
+    {
+        ros::Subscriber sub = nh_.subscribe<T>(TopicName, QueueSize, boost::bind(CallbackFunc, this, _1, TopicName));
+        ROS_INFO("Subscribed to: %s", TopicName.c_str());
+        subscribers_.push_back(sub);
+    }
+
+    // subscribe to a list of topics
+    template<typename T>
+    void CreateSubscriber(
+        const std::vector<std::string>& TopicNameList,
+        const int& QueueSize, 
+        void(SaveBags::*CallbackFunc)(const typename T::ConstPtr&, const std::string&))
+    {
+        for(const std::string& topic_name : TopicNameList)
+        {
+            ros::Subscriber sub = nh_.subscribe<T>(topic_name, QueueSize, boost::bind(CallbackFunc, this, _1, topic_name));
+            ROS_INFO("Subscribed to: %s", topic_name.c_str());
+            subscribers_.push_back(sub);
+        }
     }
 
 };
@@ -98,15 +166,17 @@ int main(int argc, char** argv) {
     ros::NodeHandle nh;
 
     // init class
-    SaveBags save_bags;
+    SaveBags save_bags(nh);
 
-    // listen to start topic
-    ros::Subscriber start_topic = nh.subscribe<std_msgs::Empty>("/hololens/natural_input_capture/start", 0, &SaveBags::StartRecordingBag, &save_bags);
-    ros::Subscriber stop_topic = nh.subscribe<std_msgs::Empty>("/hololens/natural_input_capture/stop", 0, &SaveBags::StopRecordingBag, &save_bags);
+    // start listening to configured topics
+    save_bags.SubscribeToTopic<std_msgs::Empty>("start_capture_topicname_", 0, &SaveBags::StartRecordingBag);
+    save_bags.SubscribeToTopic<std_msgs::Empty>("stop_capture_topicname_", 0, &SaveBags::StopRecordingBag);
+    save_bags.SubscribeToTopic<std_msgs::Empty>("image_stop_topicnames_", 0, &SaveBags::WriteToBag<std_msgs::Empty>);
+    save_bags.SubscribeToTopic<sensor_msgs::Image>("image_topicnames_", 100, &SaveBags::WriteToBagStamped<sensor_msgs::Image>);
+    save_bags.SubscribeToTopic<audio_common_msgs::AudioData>("audio_data_topicname_", 100, &SaveBags::WriteToBag<audio_common_msgs::AudioData>);
 
-    std::string topic_name = "/hololens/LEFT_FRONT/image";
-    ros::Subscriber image_topic = nh.subscribe<sensor_msgs::Image>(topic_name, 100, boost::bind(&SaveBags::WriteImageMsg, &save_bags, _1, topic_name));
-
+    // spin
     ros::spin();
+
     return 0;
 }

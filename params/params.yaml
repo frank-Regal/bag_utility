@@ -1,0 +1,13 @@
+# Uncomment to export files outside of this ros package path
+#filepath: "/mnt/e/devel/local/ws_hrecog/src/recorded_data/train"
+
+# Name of raw image topic
+start_capture_topicname_: "/hololens/natural_input_capture/start" 
+
+stop_capture_topicname_: "/hololens/natural_input_capture/stop"
+
+image_topicnames_: ["/hololens/RIGHT_RIGHT/image", "/hololens/RIGHT_FRONT/image", "/hololens/LEFT_FRONT/image", "/hololens/LEFT_LEFT/image"]
+
+image_stop_topicnames_: ["/hololens/RIGHT_RIGHT/stop", "/hololens/RIGHT_FRONT/stop", "/hololens/LEFT_FRONT/stop", "/hololens/LEFT_LEFT/stop"]
+
+audio_data_topicname_: "/hololens/microphone/data"
