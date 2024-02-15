@@ -16,16 +16,30 @@ public:
     // constructors
     SaveBags(ros::NodeHandle& Nh):
         nh_(Nh),
-        file_timestamp("new"),
-        post_fix_("bag"){}
-    
-    SaveBags(ros::NodeHandle& Nh, std::string& PostFix):
-        nh_(Nh),
-        file_timestamp("new"),
-        post_fix_(PostFix) {}
+        file_timestamp_("new"),
+        post_fix_("bag"),
+        output_directory_("./")
+    {
+        if(nh_.getParam("output_directory", output_directory_)) {
+            ROS_INFO("Bags will be saved to: %s", output_directory_.c_str()); 
+        } else {
+            ROS_ERROR("Faild to load 'output_directory' param.");
+            ROS_INFO("Bags will be saved to: %s", output_directory_.c_str()); 
+        }
+
+        if(nh_.getParam("postfix", post_fix_)) {
+            ROS_INFO("Bags post fixed with: %s", post_fix_.c_str()); 
+        } else {
+            ROS_ERROR("Faild to load 'postfix' param.");
+            ROS_INFO("Bags post fixed with: %s", post_fix_.c_str()); 
+        }
+    }
 
     // destructor
-    ~SaveBags(){};
+    ~SaveBags()
+    {
+        bag_.close();
+    };
 
     // Subscriber function
     template<typename T>
@@ -65,7 +79,7 @@ public:
         try 
         {
             bag_.write(TopicName, ros::Time::now(), *Msg);
-            ROS_INFO("Bagged msg from: %s", TopicName.c_str());
+            //ROS_INFO("Bagged msg from: %s", TopicName.c_str());
         } 
         catch (const std::exception& e) 
         {
@@ -82,7 +96,7 @@ public:
         try 
         {
             bag_.write(TopicName, Msg->header.stamp, *Msg);
-            ROS_INFO("Bagged msg from: %s", TopicName.c_str());
+            //ROS_INFO("Bagged msg from: %s", TopicName.c_str());
         } 
         catch (const std::exception& e) 
         {
@@ -90,14 +104,20 @@ public:
         }
     }
 
-        // start utility function
+    // start utility function
     void StartRecordingBag(
         const std_msgs::Empty::ConstPtr& Msg, 
         const std::string& TopicName)
     {
-        GetTimeStamp(file_timestamp);
-        bag_.open(std::string(file_timestamp + post_fix_ + ".bag"), rosbag::bagmode::Write);
+        GetTimeStamp(file_timestamp_);
+        std::string bag_name = std::string(file_timestamp_ + post_fix_ + ".bag");
+
+        std::string out_path = output_directory_ + "/" + bag_name;
+        ROS_INFO("Saving to: %s", out_path.c_str());
+
+        bag_.open(out_path, rosbag::bagmode::Write);
         ROS_INFO_STREAM("Bag opened for recording.");
+
         WriteToBag<std_msgs::Empty>(Msg, TopicName);
     }
     
@@ -113,7 +133,8 @@ public:
 
 private:
     // class variables
-    std::string file_timestamp;
+    std::string file_timestamp_;
+    std::string output_directory_;
     std::string post_fix_;
     rosbag::Bag bag_;
     std::vector<ros::Subscriber> subscribers_;

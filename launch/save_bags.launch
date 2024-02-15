@@ -2,6 +2,13 @@
     <!-- Load parameters from YAML file -->
     <rosparam file="$(find bag_utility)/params/params.yaml" command="load"/>
 
+    <!-- configure where you should save the data -->
+    <arg name="path" default="$(find bag_utility)/bags"/>
+    <arg name="name" default="bag"/>
+    <param name="output_directory" value="$(arg path)" />
+    <param name="postfix" value="$(arg name)" />
+
     <!--launch node-->
     <node name="save_bags" pkg="bag_utility" type="save_bags" output="screen"/>
+
 </launch>

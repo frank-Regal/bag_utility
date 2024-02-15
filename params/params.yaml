@@ -1,7 +1,7 @@
 # Uncomment to export files outside of this ros package path
 #filepath: "/mnt/e/devel/local/ws_hrecog/src/recorded_data/train"
 
-# Name of raw image topic
+# Name of raw topics to bag
 start_capture_topicname_: "/hololens/natural_input_capture/start" 
 
 stop_capture_topicname_: "/hololens/natural_input_capture/stop"
