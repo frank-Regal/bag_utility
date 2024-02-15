@@ -159,14 +159,6 @@ public:
 
         WriteToBag<std_msgs::Empty>(Msg, TopicName);
     }
-    
-    void Reset()
-    {
-        bag_.close();
-        is_recording_ = false;
-        ROS_INFO("'%s' closed", bag_name_.c_str());
-    }
-
 
     /**
      * @brief Stop recording to bag trigger function
@@ -185,25 +177,6 @@ public:
         WriteToBag<std_msgs::Empty>(Msg, TopicName);
         Reset();
     }
-
-    /**
-     * @brief Handle calls to start recording new bag, but other bag isn't closed.
-     * 
-     */
-    void ForceCloseBag()
-    {
-        ROS_ERROR("'start' msg heard but did not hear a 'stop' msg to close bag. Closing bag ...");
-        std_msgs::Empty stop_msg;
-        std::string stop_topic;
-        if(nh_.getParam("stop_capture_topicname_", stop_topic)){
-            bag_.write(stop_topic, ros::Time::now(), stop_msg);
-            Reset();
-        }
-        else {
-            ROS_ERROR("Faild to load '%s' param.", stop_topic.c_str());
-        }
-    }
-
 
 private:
     // init
@@ -275,6 +248,35 @@ private:
             ROS_INFO("listening to: %s", topic_name.c_str());
             subscribers_.push_back(sub);
         }
+    }
+
+    /**
+     * @brief Handle calls to start recording new bag, but other bag isn't closed.
+     * 
+     */
+    void ForceCloseBag()
+    {
+        ROS_ERROR("'start' msg heard but did not hear a 'stop' msg to close bag. Closing bag ...");
+        std_msgs::Empty stop_msg;
+        std::string stop_topic;
+        if(nh_.getParam("stop_capture_topicname_", stop_topic)){
+            bag_.write(stop_topic, ros::Time::now(), stop_msg);
+            Reset();
+        }
+        else {
+            ROS_ERROR("Faild to load '%s' param.", stop_topic.c_str());
+        }
+    }
+
+    /**
+     * @brief Close open bag and reset variables
+     * 
+     */
+    void Reset()
+    {
+        bag_.close();
+        is_recording_ = false;
+        ROS_INFO("'%s' closed", bag_name_.c_str());
     }
 
 };
